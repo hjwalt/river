@@ -1,0 +1,27 @@
+use bytes::BytesMut;
+use prost::Message;
+use std_logger::Config;
+
+mod core;
+mod domain;
+mod messaging;
+
+#[tokio::main]
+async fn main() -> Result<(), ()> {
+    Config::logfmt().init();
+
+    let shirt = domain::proto::Shirt::default();
+
+    let mut buf = BytesMut::with_capacity(1024);
+
+    let encoded = shirt.encode(&mut buf);
+    if encoded.is_err() {
+        return Err(());
+    }
+
+    let decoded = domain::proto::Shirt::decode(buf);
+
+    log::info!("consuming {:?}", decoded);
+
+    Ok(())
+}
