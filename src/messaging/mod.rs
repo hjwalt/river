@@ -1,41 +1,59 @@
 use std::collections::HashMap;
 
-use bytes::Buf;
+use tokio::task::JoinHandle;
 
 pub mod kafka;
 
+#[derive(Debug)]
 pub struct Message {
-    key: String,
-    body: Vec<u8>,
-    metadata: HashMap<String, Vec<String>>,
+    pub channel: String,
+    pub key: String,
+    pub body: Vec<u8>,
+    pub metadata: HashMap<String, Vec<String>>,
 }
 
 pub struct TypedMessage<T> {
-    key: String,
-    body: T,
-    metadata: HashMap<String, Vec<String>>,
+    pub channel: String,
+    pub key: String,
+    pub body: T,
+    pub metadata: HashMap<String, Vec<String>>,
 }
 
+#[derive(Debug)]
 pub struct PublishSuccess {}
 
+#[derive(Debug)]
 pub struct PublishFailure {}
 
 pub trait Publisher {
-    async fn publish(&self, m: Message) -> Result<PublishSuccess, PublishFailure>;
+    fn publish(
+        &self,
+        m: &Message,
+    ) -> impl std::future::Future<Output = Result<PublishSuccess, PublishFailure>> + Send;
 }
 
+#[derive(Debug)]
 pub struct SubscribeSuccess {}
 
+#[derive(Debug)]
 pub struct SubscribeFailure {}
 
 pub trait Subscriber {
-    async fn subscribe(&self) -> Result<SubscribeSuccess, SubscribeFailure>;
+    fn subscribe(
+        &'static self,
+        channel: String,
+    ) -> impl std::future::Future<Output = Result<SubscribeSuccess, SubscribeFailure>> + Send;
 }
 
+#[derive(Debug)]
 pub struct HandleSuccess {}
 
+#[derive(Debug)]
 pub struct HandleFailure {}
 
 pub trait Handler {
-    async fn handle(&self, msg: Message) -> Result<HandleSuccess, HandleFailure>;
+    fn handle(
+        &self,
+        msg: Message,
+    ) -> impl std::future::Future<Output = Result<HandleSuccess, HandleFailure>> + Send;
 }

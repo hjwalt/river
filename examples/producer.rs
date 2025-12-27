@@ -1,39 +1,34 @@
-use std::time::Duration;
+use std::collections::HashMap;
 
-use rdkafka::{
-    ClientConfig,
-    message::{Header, OwnedHeaders},
-    producer::{FutureProducer, FutureRecord},
-};
+use river::messaging::{Message, Publisher};
 use std_logger::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     Config::logfmt().init();
 
-    let producer: &FutureProducer = &ClientConfig::new()
-        .set("bootstrap.servers", "127.0.0.1:9092")
-        .set("message.timeout.ms", "5000")
-        .create()
-        .expect("Producer creation error");
+    let publisher = river::messaging::kafka::publisher::new(HashMap::from([
+        ("bootstrap.servers".to_owned(), "127.0.0.1:9092".to_owned()),
+        ("message.timeout.ms".to_owned(), "5000".to_owned()),
+    ]))
+    .await
+    .expect("failed to create publisher");
 
     let topic_name = "test".to_string();
 
-    let headers = OwnedHeaders::new().insert(Header {
-        key: "header_key",
-        value: Some("header_value"),
-    });
+    let message = Message {
+        channel: topic_name.to_owned(),
+        key: "123456".to_owned(),
+        body: Vec::from("123456".as_bytes()),
+        metadata: HashMap::from([("header_key".to_owned(), vec!["".to_owned()])]),
+    };
 
-    let status = producer
-        .send(
-            FutureRecord::to(&topic_name)
-                .payload("123456".as_bytes())
-                .key("123456".as_bytes())
-                .headers(headers),
-            Duration::from_secs(0),
-        )
-        .await;
+    let status = publisher.publish(&message).await;
 
+    if status.is_err() {
+        return Err(());
+    }
     log::info!("produced to cluster");
+
     Ok(())
 }
