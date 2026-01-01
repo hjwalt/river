@@ -1,8 +1,10 @@
-#[derive(Debug)]
-pub struct StartSuccess {}
+use async_trait::async_trait;
 
 #[derive(Debug)]
-pub struct StartFailure {}
+pub struct InitSuccess {}
+
+#[derive(Debug)]
+pub struct InitFailure {}
 
 #[derive(Debug)]
 pub struct StopSuccess {}
@@ -10,9 +12,15 @@ pub struct StopSuccess {}
 #[derive(Debug)]
 pub struct StopFailure {}
 
-pub trait Service {
-    fn start(&self)
-    -> impl std::future::Future<Output = Result<StartSuccess, StartFailure>> + Send;
+#[derive(Debug)]
+pub struct RunSuccess {}
 
-    fn stop(&self) -> impl std::future::Future<Output = Result<StopSuccess, StopFailure>> + Send;
+#[derive(Debug)]
+pub struct RunFailure {}
+
+#[async_trait]
+pub trait Service {
+    async fn run(&self) -> Result<RunSuccess, RunFailure>;
+    async fn init(&self) -> Result<InitSuccess, InitFailure>;
+    async fn stop(&self) -> Result<StopSuccess, StopFailure>;
 }

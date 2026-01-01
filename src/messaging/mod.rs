@@ -20,23 +20,23 @@ pub struct TypedMessage<T> {
 }
 
 #[derive(Debug)]
-pub struct PublishSuccess {}
+pub struct ProduceSuccess {}
 
 #[derive(Debug)]
-pub struct PublishFailure {}
+pub struct ProduceFailure {}
 
-pub trait Publisher {
+pub trait Producer {
     fn publish(
         &self,
         m: &Message,
-    ) -> impl std::future::Future<Output = Result<PublishSuccess, PublishFailure>> + Send;
+    ) -> impl std::future::Future<Output = Result<ProduceSuccess, ProduceFailure>> + Send;
 }
 
 #[derive(Debug)]
-pub struct SubscribeSuccess {}
+pub struct ConsumeSuccess {}
 
 #[derive(Debug)]
-pub struct SubscribeFailure {}
+pub struct ConsumeFailure {}
 
 #[derive(Debug)]
 pub struct RunSuccess {}
@@ -45,12 +45,8 @@ pub struct RunSuccess {}
 pub struct RunFailure {}
 
 #[async_trait]
-pub trait Subscriber {
-    async fn subscribe(&self, channel: String) -> Result<SubscribeSuccess, SubscribeFailure>;
-
-    async fn run(&self) -> Result<RunSuccess, RunFailure>;
-
-    fn stop(&self);
+pub trait Consumer {
+    async fn consume(&self, channel: String) -> Result<ConsumeSuccess, ConsumeFailure>;
 }
 
 #[derive(Debug)]

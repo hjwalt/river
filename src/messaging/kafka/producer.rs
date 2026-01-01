@@ -7,18 +7,18 @@ use rdkafka::{
     producer::{FutureProducer, FutureRecord},
 };
 
-use crate::messaging::{Message, PublishFailure, PublishSuccess, Publisher};
+use crate::messaging::{Message, ProduceFailure, ProduceSuccess};
 
-pub struct KafkaPublisher {
+pub struct KafkaProducer {
     producer: FutureProducer,
 }
 
 #[derive(Debug)]
-pub struct KafkaPublisherError {}
+pub struct KafkaProducerError {}
 
 pub async fn new(
     configuration: HashMap<String, String>,
-) -> Result<KafkaPublisher, KafkaPublisherError> {
+) -> Result<KafkaProducer, KafkaProducerError> {
     let mut config = ClientConfig::new();
     for (key, value) in &configuration {
         config.set(key, value);
@@ -26,16 +26,16 @@ pub async fn new(
 
     let create_status: Result<FutureProducer, KafkaError> = config.clone().create();
     if create_status.is_err() {
-        return Err(KafkaPublisherError {});
+        return Err(KafkaProducerError {});
     }
 
     let producer: FutureProducer = create_status.ok().unwrap();
 
-    Ok(KafkaPublisher { producer: producer })
+    Ok(KafkaProducer { producer: producer })
 }
 
-impl Publisher for KafkaPublisher {
-    async fn publish(&self, m: &Message) -> Result<PublishSuccess, PublishFailure> {
+impl crate::messaging::Producer for KafkaProducer {
+    async fn publish(&self, m: &Message) -> Result<ProduceSuccess, ProduceFailure> {
         let mut headers = OwnedHeaders::new();
         for (key, values) in &m.metadata {
             for value in values {
@@ -58,9 +58,9 @@ impl Publisher for KafkaPublisher {
             .await;
 
         if produce_status.is_err() {
-            return Err(PublishFailure {});
+            return Err(ProduceFailure {});
         }
 
-        Ok(PublishSuccess {})
+        Ok(ProduceSuccess {})
     }
 }

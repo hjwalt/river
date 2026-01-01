@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::{collections::HashMap, sync::atomic::AtomicBool};
 
 use async_trait::async_trait;
 use rdkafka::{
@@ -10,7 +7,10 @@ use rdkafka::{
     error::{KafkaError, KafkaResult},
 };
 
-use crate::messaging::{RunFailure, RunSuccess, SubscribeFailure, SubscribeSuccess, Subscriber};
+use crate::{
+    core::{InitFailure, InitSuccess, RunFailure, RunSuccess, Service, StopFailure, StopSuccess},
+    messaging::{ConsumeFailure, ConsumeSuccess},
+};
 
 struct KafkaContext;
 
@@ -30,33 +30,33 @@ impl ConsumerContext for KafkaContext {
     }
 }
 
-type KafkaConsumer = StreamConsumer<KafkaContext>;
+type KafkaStreamConsumer = StreamConsumer<KafkaContext>;
 
-pub struct KafkaSubscriber {
-    consumer: KafkaConsumer,
+pub struct KafkaConsumer {
+    consumer: KafkaStreamConsumer,
     running: AtomicBool,
 }
 
 #[derive(Debug)]
-pub struct KafkaSubscriberError {}
+pub struct KafkaConsumerError {}
 
 pub async fn new(
     configuration: HashMap<String, String>,
-) -> Result<KafkaSubscriber, KafkaSubscriberError> {
+) -> Result<KafkaConsumer, KafkaConsumerError> {
     let mut config = ClientConfig::new();
     for (key, value) in &configuration {
         config.set(key, value);
     }
 
     let context = KafkaContext;
-    let create_status: Result<KafkaConsumer, KafkaError> =
+    let create_status: Result<KafkaStreamConsumer, KafkaError> =
         config.clone().create_with_context(context);
     if create_status.is_err() {
-        return Err(KafkaSubscriberError {});
+        return Err(KafkaConsumerError {});
     }
 
-    let consumer: KafkaConsumer = create_status.ok().unwrap();
-    let subscriber = KafkaSubscriber {
+    let consumer: KafkaStreamConsumer = create_status.ok().unwrap();
+    let subscriber = KafkaConsumer {
         consumer: consumer,
         running: AtomicBool::new(false),
     };
@@ -65,16 +65,20 @@ pub async fn new(
 }
 
 #[async_trait]
-impl Subscriber for KafkaSubscriber {
-    async fn subscribe(&self, channel: String) -> Result<SubscribeSuccess, SubscribeFailure> {
+impl crate::messaging::Consumer for KafkaConsumer {
+    async fn consume(&self, channel: String) -> Result<ConsumeSuccess, ConsumeFailure> {
         let topics = [channel.as_str()];
         self.consumer
             .subscribe(&topics)
             .expect("Can't subscribe to specified topics");
 
-        Ok(SubscribeSuccess {})
+        Ok(ConsumeSuccess {})
     }
+}
 
+// note that this large loop is fine as long as there are "await", otherwise use tokio::task::yield_now()
+#[async_trait]
+impl Service for KafkaConsumer {
     async fn run(&self) -> Result<RunSuccess, RunFailure> {
         // self.running.store(false, order);
         // self.running.
@@ -116,7 +120,12 @@ impl Subscriber for KafkaSubscriber {
         Ok(RunSuccess {})
     }
 
-    fn stop(&self) {
-        // self.running = false;
+    async fn init(&self) -> Result<InitSuccess, InitFailure> {
+        Ok(InitSuccess {})
+    }
+
+    async fn stop(&self) -> Result<StopSuccess, StopFailure> {
+        self.consumer.unsubscribe();
+        Ok(StopSuccess {})
     }
 }

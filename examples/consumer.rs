@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use river::messaging::{RunFailure, RunSuccess, Subscriber, kafka::subscriber::KafkaSubscriber};
+use river::{core::Service, messaging::Consumer};
 use std_logger::Config;
 use tokio::task::JoinHandle;
 
@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 async fn main() -> Result<(), ()> {
     Config::logfmt().init();
 
-    let subscriber = river::messaging::kafka::subscriber::new(HashMap::from([
+    let subscriber = river::messaging::kafka::consumer::new(HashMap::from([
         ("group.id".to_owned(), "test-rs-2".to_owned()),
         ("bootstrap.servers".to_owned(), "127.0.0.1:9092".to_owned()),
         ("enable.auto.commit".to_owned(), "false".to_owned()),
@@ -21,14 +21,14 @@ async fn main() -> Result<(), ()> {
     log::info!("subscribing");
 
     subscriber
-        .subscribe("test".to_owned())
+        .consume("test".to_owned())
         .await
         .expect("failed to subscribe to topic");
 
     let subscriber_arc = Arc::new(subscriber);
     let subscriber_arc_self = subscriber_arc.clone();
 
-    // subscriber is now owned by this long running loop
+    // subscriber_arc is now owned by this long running loop
     let handle: JoinHandle<Result<(), ()>> = tokio::spawn(async move {
         subscriber_arc.run().await.expect("ok");
         Ok(())
@@ -36,7 +36,7 @@ async fn main() -> Result<(), ()> {
 
     log::info!("subscriber started");
 
-    subscriber_arc_self.stop();
+    // subscriber_arc_self.stop().await;
 
     handle.await.expect("ok");
     // subscriber_arc.stop();

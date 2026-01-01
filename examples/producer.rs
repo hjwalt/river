@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap};
 
-use river::messaging::{Message, Publisher};
+use river::messaging::{Message, Producer};
 use std_logger::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     Config::logfmt().init();
 
-    let publisher = river::messaging::kafka::publisher::new(HashMap::from([
+    let publisher = river::messaging::kafka::producer::new(HashMap::from([
         ("bootstrap.servers".to_owned(), "127.0.0.1:9092".to_owned()),
         ("message.timeout.ms".to_owned(), "5000".to_owned()),
     ]))
