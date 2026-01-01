@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use tokio::task::JoinHandle;
+use async_trait::async_trait;
 
 pub mod kafka;
 
@@ -38,11 +38,19 @@ pub struct SubscribeSuccess {}
 #[derive(Debug)]
 pub struct SubscribeFailure {}
 
+#[derive(Debug)]
+pub struct RunSuccess {}
+
+#[derive(Debug)]
+pub struct RunFailure {}
+
+#[async_trait]
 pub trait Subscriber {
-    fn subscribe(
-        &'static self,
-        channel: String,
-    ) -> impl std::future::Future<Output = Result<SubscribeSuccess, SubscribeFailure>> + Send;
+    async fn subscribe(&self, channel: String) -> Result<SubscribeSuccess, SubscribeFailure>;
+
+    async fn run(&self) -> Result<RunSuccess, RunFailure>;
+
+    fn stop(&self);
 }
 
 #[derive(Debug)]

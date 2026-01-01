@@ -1,92 +1,45 @@
-use rdkafka::{
-    ClientConfig, ClientContext, Message, TopicPartitionList,
-    config::RDKafkaLogLevel,
-    consumer::{BaseConsumer, CommitMode, Consumer, ConsumerContext, Rebalance, StreamConsumer},
-    error::KafkaResult,
-};
+use std::{collections::HashMap, sync::Arc};
+
+use river::messaging::{RunFailure, RunSuccess, Subscriber, kafka::subscriber::KafkaSubscriber};
 use std_logger::Config;
+use tokio::task::JoinHandle;
 
-struct KafkaContext;
-
-impl ClientContext for KafkaContext {}
-
-impl ConsumerContext for KafkaContext {
-    fn pre_rebalance(&self, _: &BaseConsumer<Self>, rebalance: &Rebalance) {
-        log::info!("Pre rebalance {:?}", rebalance);
-    }
-
-    fn post_rebalance(&self, _: &BaseConsumer<Self>, rebalance: &Rebalance) {
-        log::info!("Post rebalance {:?}", rebalance);
-    }
-
-    fn commit_callback(&self, result: KafkaResult<()>, _offsets: &TopicPartitionList) {
-        log::info!("Committing offsets: {:?}", result);
-    }
-}
-
-type KafkaConsumer = StreamConsumer<KafkaContext>;
-
-#[tokio::main]
+// careful with the thread count because if there are 8 long running loops, everything will be stuck
+#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 async fn main() -> Result<(), ()> {
     Config::logfmt().init();
 
-    let context = KafkaContext;
-
-    let mut config = ClientConfig::new();
-
-    config
-        .set("group.id", "test-rs-2")
-        .set("bootstrap.servers", "127.0.0.1:9092")
-        // .set("enable.partition.eof", "false")
-        // .set("session.timeout.ms", "6000")
-        .set("enable.auto.commit", "false")
-        //.set("statistics.interval.ms", "30000")
-        .set("auto.offset.reset", "smallest")
-        .set_log_level(RDKafkaLogLevel::Debug);
-
-    let consumer: KafkaConsumer = config
-        .create_with_context(context)
-        .expect("Consumer creation failed");
+    let subscriber = river::messaging::kafka::subscriber::new(HashMap::from([
+        ("group.id".to_owned(), "test-rs-2".to_owned()),
+        ("bootstrap.servers".to_owned(), "127.0.0.1:9092".to_owned()),
+        ("enable.auto.commit".to_owned(), "false".to_owned()),
+        ("auto.offset.reset".to_owned(), "smallest".to_owned()),
+    ]))
+    .await
+    .expect("failed to create subscriber");
 
     log::info!("subscribing");
 
-    let topics = ["test"];
-    consumer
-        .subscribe(&topics)
-        .expect("Can't subscribe to specified topics");
+    subscriber
+        .subscribe("test".to_owned())
+        .await
+        .expect("failed to subscribe to topic");
 
-    loop {
-        match consumer.recv().await {
-            Err(e) => {
-                log::warn!("Kafka error: {}", e);
-                break;
-            }
-            Ok(m) => {
-                let payload = match m.payload_view::<str>() {
-                    None => "",
-                    Some(Ok(s)) => s,
-                    Some(Err(e)) => {
-                        log::warn!("Error while deserializing message payload: {:?}", e);
-                        break;
-                    }
-                };
-                log::info!(
-                    "key: '{:?}', payload: '{}', topic: {}, partition: {}, offset: {}, timestamp: {:?}",
-                    m.key(),
-                    payload,
-                    m.topic(),
-                    m.partition(),
-                    m.offset(),
-                    m.timestamp()
-                );
-                // if let Some(headers) = m.headers() {
-                //     for header in headers.iter() {
-                //         log::info!("  Header {:#?}: {:?}", header.key, header.value);
-                //     }
-                // }
-                consumer.commit_message(&m, CommitMode::Sync).unwrap();
-            }
-        };
-    }
+    let subscriber_arc = Arc::new(subscriber);
+    let subscriber_arc_self = subscriber_arc.clone();
+
+    // subscriber is now owned by this long running loop
+    let handle: JoinHandle<Result<(), ()>> = tokio::spawn(async move {
+        subscriber_arc.run().await.expect("ok");
+        Ok(())
+    });
+
+    log::info!("subscriber started");
+
+    subscriber_arc_self.stop();
+
+    handle.await.expect("ok");
+    // subscriber_arc.stop();
+
     Ok(())
 }
